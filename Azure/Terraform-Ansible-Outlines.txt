@@ -1,0 +1,19 @@
+# Terraform and Ansible draft for "full deployment" of WAF and/or CGF
+#
+# Terraform = infrastructure as code
+# Ansible   = desired state configuration as code
+
+User input:
+	New infrastructure or existing VNet?
+	If existing, new RG or existing RG?
+	Either case, need VNet name and RG name
+	If existing, check VNet for available addr space
+	If existing, new or existing storage?
+
+VNet /16
+  CGF subnet
+  Web subnet
+  Data subnet
+  App subnet
+  
+  
