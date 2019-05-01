@@ -1,15 +1,15 @@
 ### Spin up Azure infrastructure
 
 # New Resource Group
-resource "azurerm_resource_group" "test01" {
+resource "azurerm_resource_group" "test01-rg" {
   name     = "${var.prefix}-resources"
   location = "${var.location}"
 }
 
 # New storage account
-resource "azurerm_storage_account" "test01" {
+resource "azurerm_storage_account" "test01-cgf-elb" {
   name                     = "test01storageacct"
-  resource_group_name      = "${azurerm_resource_group.test01.name}"
+  resource_group_name      = "${azurerm_resource_group.test01-rg.name}"
   location                 = "${var.location}"
   account_tier             = "Standard"
   account_replication_type = "LRS"
@@ -18,25 +18,25 @@ resource "azurerm_storage_account" "test01" {
 # New standard public ip addresses
 resource "azurerm_public_ip" "test01-primary-pip" {
   name                = "ELB-PubIP-Primary"
-  location            = "${azurerm_resource_group.test01.location}"
-  resource_group_name = "${azurerm_resource_group.test01.name}"
+  location            = "${azurerm_resource_group.test01-rg.location}"
+  resource_group_name = "${azurerm_resource_group.test01-rg.name}"
   sku                 = "Standard"
   allocation_method   = "Static"
 }
 
 resource "azurerm_public_ip" "test01-secondary-pip" {
   name                = "ELB-PubIP-Secondary"
-  location            = "${azurerm_resource_group.test01.location}"
-  resource_group_name = "${azurerm_resource_group.test01.name}"
+  location            = "${azurerm_resource_group.test01-rg.location}"
+  resource_group_name = "${azurerm_resource_group.test01-rg.name}"
   sku                 = "Standard"
   allocation_method   = "Static"
 }
 
-# New standard load balancer
-resource "azurerm_lb" "test01" {
+# New standard load balancer - external
+resource "azurerm_lb" "test01-cgf-elb" {
   name                = "CGF-ELB"
-  location            = "${azurerm_resource_group.test01.location}"
-  resource_group_name = "${azurerm_resource_group.test01.name}"
+  location            = "${azurerm_resource_group.test01-rg.location}"
+  resource_group_name = "${azurerm_resource_group.test01-rg.name}"
   sku                 = "Standard"
   
   frontend_ip_configuration {
@@ -50,11 +50,26 @@ resource "azurerm_lb" "test01" {
   }
 }
 
+# New standard load balancer - internal
+resource "azurerm_lb" "test01-cgf-ilb" {
+  name                = "CGF-ILB"
+  location            = "${azurerm_resource_group.test01-rg.location}"
+  resource_group_name = "${azurerm_resource_group.test01-rg.name}"
+  sku                 = "Standard"
+  
+  frontend_ip_configuration {
+    name                          = "ILB-IP-Address"
+    private_ip_address            = "${var.ilbIpAddress}"
+    private_ip_address_allocation = "static"
+    subnet_id                     = "${azurerm_subnet.fwsubnet.id}"
+  }
+}
+
 # New virtual network
 resource "azurerm_virtual_network" "test01" {
   name                = "${var.prefix}-VNet"
-  resource_group_name = "${azurerm_resource_group.test01.name}"
-  location            = "${azurerm_resource_group.test01.location}"
+  resource_group_name = "${azurerm_resource_group.test01-rg.name}"
+  location            = "${azurerm_resource_group.test01-rg.location}"
   address_space       = ["${var.addrSpace}"]
 }
 
@@ -62,35 +77,77 @@ resource "azurerm_virtual_network" "test01" {
 resource "azurerm_subnet" "fwsubnet" {
   name                 = "fwsubnet"
   virtual_network_name = "${azurerm_virtual_network.test01.name}"
-  resource_group_name  = "${azurerm_resource_group.test01.name}"
-  address_prefix       = "10.99.1.0/24"
+  resource_group_name  = "${azurerm_resource_group.test01-rg.name}"
+  address_prefix       = "${var.fwSubnetCIDR}"
 }
 
 resource "azurerm_subnet" "websubnet" {
   name                 = "websubnet"
   virtual_network_name = "${azurerm_virtual_network.test01.name}"
-  resource_group_name  = "${azurerm_resource_group.test01.name}"
-  address_prefix       = "10.99.2.0/24"
+  resource_group_name  = "${azurerm_resource_group.test01-rg.name}"
+  address_prefix       = "${var.webSubnetCIDR}"
 }
 
 resource "azurerm_subnet" "appsubnet" {
   name                 = "appsubnet"
   virtual_network_name = "${azurerm_virtual_network.test01.name}"
-  resource_group_name  = "${azurerm_resource_group.test01.name}"
-  address_prefix       = "10.99.3.0/24"
+  resource_group_name  = "${azurerm_resource_group.test01-rg.name}"
+  address_prefix       = "${var.appSubnetCIDR}"
 }
 
 # New NSG
 resource "azurerm_network_security_group" "test01" {
   name                = "${var.prefix}-nsg"
-  resource_group_name = "${azurerm_resource_group.test01.name}"
-  location            = "${azurerm_resource_group.test01.location}"
+  resource_group_name = "${azurerm_resource_group.test01-rg.name}"
+  location            = "${azurerm_resource_group.test01-rg.location}"
 }
 
 # New route tables for standard LBs
 resource "azurerm_route_table" "test01" {
   name                          = "routetable-websubnet"
-  location                      = "${azurerm_resource_group.test01.location}"
-  resource_group_name           = "${azurerm_resource_group.test01.name}"
+  location                      = "${azurerm_resource_group.test01-rg.location}"
+  resource_group_name           = "${azurerm_resource_group.test01-rg.name}"
   disable_bgp_route_propagation = true
+}
+
+resource "azurerm_route_table" "test01-webroute" {
+  name                = "${var.prefix}-RT-WebSubnet"
+  location            = "${var.location}"
+  resource_group_name = "${azurerm_resource_group.test01-rg.name}"
+
+  route {
+    name                   = "${var.prefix}-WebToInternet"
+    address_prefix         = "0.0.0.0/0"
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = "${var.ilbIpAddress}"
+  }
+
+  route {
+    name                   = "${var.prefix}-WebToAppSubnet"
+    address_prefix         = "${var.appSubnetCIDR}"
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = "${var.ilbIpAddress}"
+  }
+
+}
+
+resource "azurerm_route_table" "test01-approute" {
+  name                = "${var.prefix}-RT-AppSubnet"
+  location            = "${var.location}"
+  resource_group_name = "${azurerm_resource_group.test01-rg.name}"
+
+  route {
+    name                   = "${var.prefix}-AppToInternet"
+    address_prefix         = "0.0.0.0/0"
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = "${var.ilbIpAddress}"
+  }
+
+  route {
+    name                   = "${var.prefix}-AppToWebSubnet"
+    address_prefix         = "${var.webSubnetCIDR}"
+    next_hop_type          = "VirtualAppliance"
+    next_hop_in_ip_address = "${var.ilbIpAddress}"
+  }
+
 }
