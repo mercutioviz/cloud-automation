@@ -8,7 +8,7 @@ resource "azurerm_resource_group" "test01-rg" {
 
 # New storage account
 resource "azurerm_storage_account" "test01-cgf-elb" {
-  name                     = "test01storageacct"
+  name                     = "${var.prefix}test01storageacct"
   resource_group_name      = "${azurerm_resource_group.test01-rg.name}"
   location                 = "${var.location}"
   account_tier             = "Standard"
@@ -17,7 +17,7 @@ resource "azurerm_storage_account" "test01-cgf-elb" {
 
 # New standard public ip addresses
 resource "azurerm_public_ip" "test01-primary-pip" {
-  name                = "ELB-PubIP-Primary"
+  name                = "${var.prefix}-ELB-PubIP-Primary"
   location            = "${azurerm_resource_group.test01-rg.location}"
   resource_group_name = "${azurerm_resource_group.test01-rg.name}"
   sku                 = "Standard"
@@ -25,7 +25,7 @@ resource "azurerm_public_ip" "test01-primary-pip" {
 }
 
 resource "azurerm_public_ip" "test01-secondary-pip" {
-  name                = "ELB-PubIP-Secondary"
+  name                = "${var.prefix}-ELB-PubIP-Secondary"
   location            = "${azurerm_resource_group.test01-rg.location}"
   resource_group_name = "${azurerm_resource_group.test01-rg.name}"
   sku                 = "Standard"
@@ -34,7 +34,7 @@ resource "azurerm_public_ip" "test01-secondary-pip" {
 
 # New standard load balancer - external
 resource "azurerm_lb" "test01-cgf-elb" {
-  name                = "CGF-ELB"
+  name                = "${var.prefix}-CGF-ELB"
   location            = "${azurerm_resource_group.test01-rg.location}"
   resource_group_name = "${azurerm_resource_group.test01-rg.name}"
   sku                 = "Standard"
@@ -52,7 +52,7 @@ resource "azurerm_lb" "test01-cgf-elb" {
 
 # New standard load balancer - internal
 resource "azurerm_lb" "test01-cgf-ilb" {
-  name                = "CGF-ILB"
+  name                = "${var.prefix}-CGF-ILB"
   location            = "${azurerm_resource_group.test01-rg.location}"
   resource_group_name = "${azurerm_resource_group.test01-rg.name}"
   sku                 = "Standard"
@@ -104,7 +104,7 @@ resource "azurerm_network_security_group" "test01" {
 
 # New route tables for standard LBs
 resource "azurerm_route_table" "test01" {
-  name                          = "routetable-websubnet"
+  name                          = "${var.prefix}-routetable-websubnet"
   location                      = "${azurerm_resource_group.test01-rg.location}"
   resource_group_name           = "${azurerm_resource_group.test01-rg.name}"
   disable_bgp_route_propagation = true
@@ -150,4 +150,24 @@ resource "azurerm_route_table" "test01-approute" {
     next_hop_in_ip_address = "${var.ilbIpAddress}"
   }
 
+}
+
+# Availability set for CGFs
+resource "azurerm_availability_set" "test01-cgf-as" {
+  name                         = "${var.prefix}-CGF-AS"
+  location                     = "${var.location}"
+  managed                      = true
+  resource_group_name          = "${azurerm_resource_group.test01-rg.name}"
+  platform_fault_domain_count  = 2
+  platform_update_domain_count = 2
+}
+
+# Availability set for WAFs
+resource "azurerm_availability_set" "test01-waf-as" {
+  name                         = "${var.prefix}-WAF-AS"
+  location                     = "${var.location}"
+  managed                      = true
+  resource_group_name          = "${azurerm_resource_group.test01-rg.name}"
+  platform_fault_domain_count  = 2
+  platform_update_domain_count = 2
 }
